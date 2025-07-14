@@ -33,6 +33,14 @@
         "**/*.ts",
         "**/*.tsx"
     ],
+    "exclude": [
+        "node_modules",
+        "vite.config.ts",
+        "tsconfig.node.json",
+        "postcss.config.js",
+        "tailwind.config.js",
+        ".eslintrc.cjs"
+    ],
     "references": [
         {
             "path": "./tsconfig.node.json"

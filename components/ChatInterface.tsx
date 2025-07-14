@@ -1,50 +1,28 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { ScrollArea } from "./ui/scroll-area";
-import { Send, Bot, User } from "lucide-react";
-
-interface Message {
-  id: string;
-  content: string;
-  sender: 'user' | 'bot';
-  timestamp: Date;
-}
+import { Send, Bot, User, AlertCircle } from "lucide-react";
+import { useChat } from "../hooks/useChat";
+import { LoadingDots } from "./ui/loading-dots";
+import { validateConfig } from "../config/api-config";
 
 export function ChatInterface() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      content: 'Hello! I\'m the Inflection Journey Reports Bot. I can help you with journey analytics, report generation, and insights about your customer journeys. How can I assist you today?',
-      sender: 'bot',
-      timestamp: new Date(Date.now() - 30000)
-    }
-  ]);
+  const { messages, sendMessage, isLoading } = useChat();
   const [inputValue, setInputValue] = useState('');
+  const [configErrors, setConfigErrors] = useState<string[]>([]);
 
-  const handleSendMessage = () => {
-    if (!inputValue.trim()) return;
+  // Check configuration on component mount
+  useEffect(() => {
+    const errors = validateConfig();
+    setConfigErrors(errors);
+  }, []);
 
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      content: inputValue,
-      sender: 'user',
-      timestamp: new Date()
-    };
+  const handleSendMessage = async () => {
+    if (!inputValue.trim() || isLoading) return;
 
-    setMessages(prev => [...prev, newMessage]);
+    await sendMessage(inputValue);
     setInputValue('');
-
-    // Simulate bot response
-    setTimeout(() => {
-      const botResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        content: 'I understand you\'re interested in journey reports. I can help you analyze customer touchpoints, conversion rates, and engagement metrics. Would you like me to generate a specific report or explain any particular journey metrics?',
-        sender: 'bot',
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, botResponse]);
-    }, 1000);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -57,6 +35,40 @@ export function ChatInterface() {
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
+
+  // Show configuration errors if any
+  if (configErrors.length > 0) {
+    return (
+      <div className="flex flex-col h-screen max-w-4xl mx-auto bg-white">
+        <div className="bg-[var(--color-inflection-primary)] text-white px-6 py-4 flex items-center gap-3">
+          <div className="w-8 h-8 bg-[var(--color-inflection-accent)] rounded-lg flex items-center justify-center">
+            <Bot className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-white">Inflection Journey Reports Bot</h1>
+            <p className="text-[var(--color-inflection-light)] opacity-90 text-sm">AI-powered journey analytics assistant</p>
+          </div>
+        </div>
+
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md">
+            <div className="flex items-center gap-3 mb-4">
+              <AlertCircle className="w-6 h-6 text-red-600" />
+              <h2 className="text-lg font-semibold text-red-800">Configuration Error</h2>
+            </div>
+            <div className="space-y-2">
+              {configErrors.map((error, index) => (
+                <p key={index} className="text-sm text-red-700">{error}</p>
+              ))}
+            </div>
+            <p className="text-sm text-red-600 mt-4">
+              Please check your environment variables and restart the application.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-screen max-w-4xl mx-auto bg-white">
@@ -81,8 +93,8 @@ export function ChatInterface() {
             >
               <div className={`flex gap-3 max-w-[80%] ${message.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${message.sender === 'user'
-                    ? 'bg-[var(--color-inflection-secondary)]'
-                    : 'bg-[var(--color-inflection-accent)]'
+                  ? 'bg-[var(--color-inflection-secondary)]'
+                  : 'bg-[var(--color-inflection-accent)]'
                   }`}>
                   {message.sender === 'user' ? (
                     <User className="w-4 h-4 text-white" />
@@ -91,12 +103,21 @@ export function ChatInterface() {
                   )}
                 </div>
                 <div className={`rounded-lg px-4 py-3 ${message.sender === 'user'
-                    ? 'bg-[var(--color-inflection-primary)] text-white'
+                  ? 'bg-[var(--color-inflection-primary)] text-white'
+                  : message.error
+                    ? 'bg-red-50 border border-red-200 text-red-800'
                     : 'bg-[var(--color-inflection-light)] text-gray-800'
                   }`}>
-                  <p className="whitespace-pre-wrap">{message.content}</p>
+                  <div className="flex items-center gap-2">
+                    {message.isLoading && (
+                      <LoadingDots className="text-gray-500" size="sm" />
+                    )}
+                    <p className="whitespace-pre-wrap">{message.content}</p>
+                  </div>
                   <p className={`text-xs mt-1 ${message.sender === 'user'
-                      ? 'text-[var(--color-inflection-light)]'
+                    ? 'text-[var(--color-inflection-light)]'
+                    : message.error
+                      ? 'text-red-600'
                       : 'text-gray-500'
                     }`}>
                     {formatTime(message.timestamp)}
@@ -117,13 +138,18 @@ export function ChatInterface() {
             onKeyPress={handleKeyPress}
             placeholder="Ask about journey reports, analytics, or insights..."
             className="flex-1 border-[var(--color-inflection-primary)]/20 focus:border-[var(--color-inflection-primary)] focus:ring-[var(--color-inflection-primary)]/20"
+            disabled={isLoading}
           />
           <Button
             onClick={handleSendMessage}
-            disabled={!inputValue.trim()}
+            disabled={!inputValue.trim() || isLoading}
             className="bg-[var(--color-inflection-primary)] hover:bg-[var(--color-inflection-secondary)] text-white"
           >
-            <Send className="w-4 h-4" />
+            {isLoading ? (
+              <LoadingDots className="text-white" size="sm" />
+            ) : (
+              <Send className="w-4 h-4" />
+            )}
           </Button>
         </div>
       </div>
