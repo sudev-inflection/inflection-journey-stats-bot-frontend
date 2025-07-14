@@ -86,13 +86,19 @@ export class MCPClient {
      */
     async invokeTool(toolName: string, arguments_: Record<string, any>): Promise<any> {
         try {
+            console.log(`🔧 [MCP Debug] Invoking tool: ${toolName}`);
+            console.log(`🔧 [MCP Debug] Arguments:`, JSON.stringify(arguments_, null, 2));
+
             const result = await this.makeRPCRequest('tools/call', {
                 name: toolName,
                 arguments: arguments_
             });
 
+            console.log(`🔧 [MCP Debug] Raw tool result for ${toolName}:`, JSON.stringify(result, null, 2));
+
             return result;
         } catch (error) {
+            console.error(`🔧 [MCP Debug] Error invoking tool ${toolName}:`, error);
             throw new Error(`Error invoking tool ${toolName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     }

@@ -63,6 +63,9 @@ export function useChat() {
                 // Handle function call
                 const functionCall = response.function_call;
 
+                console.log(`🤖 [Chat Debug] Function call detected:`, functionCall.name);
+                console.log(`🤖 [Chat Debug] Function arguments:`, functionCall.arguments);
+
                 // Add assistant message with loading state
                 const assistantMessage: Message = {
                     id: (Date.now() + 1).toString(),
@@ -76,6 +79,8 @@ export function useChat() {
                 try {
                     // Handle the function call
                     const toolResult = await openaiClient.handleFunctionCall(functionCall);
+
+                    console.log(`🤖 [Chat Debug] Tool result received:`, JSON.stringify(toolResult, null, 2));
 
                     // Parse function call arguments to get tool name
                     const args = JSON.parse(functionCall.arguments);
@@ -91,6 +96,8 @@ export function useChat() {
                     // Send follow-up to get final response
                     const finalResponse = await openaiClient.sendFollowUpMessage(followUpMessages);
 
+                    console.log(`🤖 [Chat Debug] Final processed response:`, finalResponse);
+
                     // Update the assistant message with final response
                     setMessages(prev => prev.map(msg =>
                         msg.id === assistantMessage.id
@@ -99,6 +106,7 @@ export function useChat() {
                     ));
 
                 } catch (error) {
+                    console.error(`🤖 [Chat Debug] Function call error:`, error);
                     // Handle function call error
                     const errorMessage: Message = {
                         id: (Date.now() + 2).toString(),
