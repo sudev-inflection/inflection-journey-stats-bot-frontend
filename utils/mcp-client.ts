@@ -59,6 +59,72 @@ export class MCPClient {
     }
 
     /**
+     * Process arguments and set default values based on tool schema
+     */
+    private processArguments(arguments_: Record<string, any>, schema: any): Record<string, any> {
+        const processed = { ...arguments_ };
+
+        if (schema.properties) {
+            for (const [fieldName, fieldSchema] of Object.entries(schema.properties)) {
+                // Set default values if not provided
+                if (!(fieldName in processed) && 'default' in fieldSchema) {
+                    processed[fieldName] = fieldSchema.default;
+                }
+            }
+        }
+
+        return processed;
+    }
+
+    /**
+     * Validate arguments against tool schema and provide helpful error messages
+     */
+    private validateArguments(toolName: string, arguments_: Record<string, any>, schema: any): void {
+        const errors: string[] = [];
+
+        // Check required fields
+        if (schema.required) {
+            for (const requiredField of schema.required) {
+                if (!(requiredField in arguments_)) {
+                    errors.push(`Missing required field: ${requiredField}`);
+                }
+            }
+        }
+
+        // Check field types and constraints
+        if (schema.properties) {
+            for (const [fieldName, fieldValue] of Object.entries(arguments_)) {
+                const fieldSchema = schema.properties[fieldName];
+                if (!fieldSchema) {
+                    errors.push(`Unknown field: ${fieldName}`);
+                    continue;
+                }
+
+                // Type validation
+                if (fieldSchema.type === 'integer' && typeof fieldValue !== 'number') {
+                    errors.push(`Field ${fieldName} must be a number`);
+                } else if (fieldSchema.type === 'string' && typeof fieldValue !== 'string') {
+                    errors.push(`Field ${fieldName} must be a string`);
+                }
+
+                // Range validation for integers
+                if (fieldSchema.type === 'integer' && typeof fieldValue === 'number') {
+                    if (fieldSchema.minimum !== undefined && fieldValue < fieldSchema.minimum) {
+                        errors.push(`Field ${fieldName} must be at least ${fieldSchema.minimum}`);
+                    }
+                    if (fieldSchema.maximum !== undefined && fieldValue > fieldSchema.maximum) {
+                        errors.push(`Field ${fieldName} must be at most ${fieldSchema.maximum}`);
+                    }
+                }
+            }
+        }
+
+        if (errors.length > 0) {
+            throw new Error(`Invalid arguments for ${toolName}: ${errors.join(', ')}`);
+        }
+    }
+
+    /**
      * Fetch the JSON schema for a specific tool
      */
     async getToolSpec(toolName: string): Promise<MCPToolSpec> {
@@ -107,10 +173,16 @@ export class MCPClient {
      * Fetch tool spec and invoke the tool in one operation
      */
     async fetchSpecAndInvoke(toolName: string, arguments_: Record<string, any>): Promise<any> {
-        // First fetch the spec (for validation/transformation if needed)
-        await this.getToolSpec(toolName);
+        // First fetch the spec for validation
+        const toolSpec = await this.getToolSpec(toolName);
+
+        // Process arguments and set defaults
+        const processedArgs = this.processArguments(arguments_, toolSpec.inputSchema);
+
+        // Validate arguments against the schema
+        this.validateArguments(toolName, processedArgs, toolSpec.inputSchema);
 
         // Then invoke the tool
-        return await this.invokeTool(toolName, arguments_);
+        return await this.invokeTool(toolName, processedArgs);
     }
 } 

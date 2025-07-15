@@ -34,27 +34,84 @@ export class OpenAIClient {
     }
 
     /**
-     * The single catch-all function for MCP tool invocation
+     * Get detailed tool descriptions for better GPT understanding
      */
-    private getMCPInvokeFunction() {
+    private getToolDescriptions() {
         return {
-            name: "mcp_invoke",
-            description: "Invoke an MCP server tool by name; client will fetch the tool spec and perform the call.",
-            parameters: {
-                type: "object",
-                properties: {
-                    tool: {
-                        type: "string",
-                        enum: ["list_journeys", "get_email_reports"]
-                    },
-                    arguments: {
-                        type: "object",
-                        description: "Key/value args for the given tool"
-                    }
-                },
-                required: ["tool"]
+            list_journeys: {
+                description: "List all marketing journeys from Inflection.io. Use this to discover available journeys and their IDs. Supports pagination and search functionality.",
+                when_to_use: "Use when user asks to list journeys, see available campaigns, or browse marketing journeys. Also use to get journey IDs needed for detailed reports.",
+                parameters: {
+                    page_size: "Number of journeys per page (1-100, default: 30)",
+                    page_number: "Which page to retrieve (default: 1)",
+                    search_keyword: "Filter journeys by name (optional)"
+                }
+            },
+            get_email_reports: {
+                description: "Get comprehensive email performance reports for a specific journey including aggregate stats, engagement metrics, email clients, top links, and bounce analysis.",
+                when_to_use: "Use when user asks for email performance data, campaign analytics, engagement metrics, or detailed reports for a specific journey.",
+                parameters: {
+                    journey_id: "The journey ID (required) - get this from list_journeys first",
+                    start_date: "Report start date in YYYY-MM-DD format (optional)",
+                    end_date: "Report end date in YYYY-MM-DD format (optional)"
+                }
             }
         };
+    }
+
+    /**
+     * Get the function definitions for MCP tools
+     */
+    private getMCPFunctions() {
+        return [
+            {
+                name: "list_journeys",
+                description: "List all marketing journeys from Inflection.io. Use this to discover available journeys and get their IDs. Supports pagination and search functionality.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        page_size: {
+                            type: "integer",
+                            description: "Number of journeys to return per page (default: 30, max: 100)",
+                            minimum: 1,
+                            maximum: 100
+                        },
+                        page_number: {
+                            type: "integer",
+                            description: "Page number to retrieve (default: 1)",
+                            minimum: 1
+                        },
+                        search_keyword: {
+                            type: "string",
+                            description: "Search keyword to filter journeys by name (optional)"
+                        }
+                    },
+                    required: []
+                }
+            },
+            {
+                name: "get_email_reports",
+                description: "Get comprehensive email performance reports for a specific journey including aggregate stats, engagement metrics, email clients, top links, and bounce analysis.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        journey_id: {
+                            type: "string",
+                            description: "The ID of the journey to get reports for (required) - get this from list_journeys first"
+                        },
+                        start_date: {
+                            type: "string",
+                            description: "Start date for the report period (YYYY-MM-DD format, optional)"
+                        },
+                        end_date: {
+                            type: "string",
+                            description: "End date for the report period (YYYY-MM-DD format, optional)"
+                        }
+                    },
+                    required: ["journey_id"]
+                }
+            }
+        ];
     }
 
     /**
@@ -75,7 +132,7 @@ export class OpenAIClient {
                         content: msg.content,
                         ...(msg.name && { name: msg.name })
                     })),
-                    functions: [this.getMCPInvokeFunction()],
+                    functions: this.getMCPFunctions(),
                     function_call: "auto",
                     temperature: 0.7,
                 }),
@@ -111,14 +168,16 @@ export class OpenAIClient {
     async handleFunctionCall(functionCall: FunctionCall): Promise<any> {
         try {
             const args = JSON.parse(functionCall.arguments);
-            const { tool, arguments: toolArgs } = args;
+            const toolName = functionCall.name;
 
-            if (functionCall.name !== 'mcp_invoke') {
-                throw new Error(`Unknown function: ${functionCall.name}`);
+            // Validate that this is one of our supported tools
+            const supportedTools = ['list_journeys', 'get_email_reports'];
+            if (!supportedTools.includes(toolName)) {
+                throw new Error(`Unsupported tool: ${toolName}`);
             }
 
-            // Fetch spec and invoke the tool
-            return await this.mcpClient.fetchSpecAndInvoke(tool, toolArgs || {});
+            // Invoke the tool directly
+            return await this.mcpClient.fetchSpecAndInvoke(toolName, args);
         } catch (error) {
             throw new Error(`Error handling function call: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }

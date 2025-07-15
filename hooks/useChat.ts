@@ -23,6 +23,11 @@ export function useChat() {
     ]);
     const [isLoading, setIsLoading] = useState(false);
 
+    // Track the full OpenAI conversation history including function results
+    const [openaiHistory, setOpenaiHistory] = useState<ChatMessage[]>([
+        { role: 'assistant', content: 'Hello! I\'m the Inflection Journey Reports Bot. I can help you with journey analytics, report generation, and insights about your customer journeys. How can I assist you today?' }
+    ]);
+
     // Initialize API clients
     const mcpClient = new MCPClient({ baseUrl: API_CONFIG.MCP_SERVER.baseUrl });
     const openaiClient = new OpenAIClient({
@@ -45,19 +50,12 @@ export function useChat() {
         setIsLoading(true);
 
         try {
-            // Convert messages to OpenAI format
-            const openaiMessages: ChatMessage[] = messages
-                .filter(msg => msg.sender === 'user' || msg.sender === 'bot')
-                .map(msg => ({
-                    role: msg.sender === 'user' ? 'user' : 'assistant',
-                    content: msg.content
-                }));
-
-            // Add the new user message
-            openaiMessages.push({ role: 'user', content });
+            // Add the new user message to OpenAI history
+            const updatedHistory = [...openaiHistory, { role: 'user', content }];
+            setOpenaiHistory(updatedHistory);
 
             // Send to OpenAI with function calling enabled
-            const response = await openaiClient.sendMessage(openaiMessages);
+            const response = await openaiClient.sendMessage(updatedHistory);
 
             if (response.function_call) {
                 // Handle function call
@@ -82,19 +80,32 @@ export function useChat() {
 
                     console.log(`🤖 [Chat Debug] Tool result received:`, JSON.stringify(toolResult, null, 2));
 
-                    // Parse function call arguments to get tool name
-                    const args = JSON.parse(functionCall.arguments);
-                    const toolName = args.tool;
+                    // Get tool name from function call
+                    const toolName = functionCall.name;
 
-                    // Prepare messages for follow-up (including function result)
-                    const followUpMessages: ChatMessage[] = [
-                        ...openaiMessages,
+                    // Extract the actual content from the tool result
+                    let functionContent = '';
+                    if (toolResult && toolResult.content && Array.isArray(toolResult.content)) {
+                        // Extract text from content array
+                        functionContent = toolResult.content
+                            .filter((item: any) => item.type === 'text')
+                            .map((item: any) => item.text)
+                            .join('\n');
+                    } else {
+                        // Fallback to stringifying the entire result
+                        functionContent = JSON.stringify(toolResult);
+                    }
+
+                    // Update OpenAI history with assistant response and function result
+                    const historyWithFunction = [
+                        ...updatedHistory,
                         { role: 'assistant', content: response.content || '' },
-                        { role: 'function', name: toolName, content: JSON.stringify(toolResult) }
+                        { role: 'function', name: toolName, content: functionContent }
                     ];
+                    setOpenaiHistory(historyWithFunction);
 
                     // Send follow-up to get final response
-                    const finalResponse = await openaiClient.sendFollowUpMessage(followUpMessages);
+                    const finalResponse = await openaiClient.sendFollowUpMessage(historyWithFunction);
 
                     console.log(`🤖 [Chat Debug] Final processed response:`, finalResponse);
 
@@ -104,6 +115,9 @@ export function useChat() {
                             ? { ...msg, content: finalResponse, isLoading: false }
                             : msg
                     ));
+
+                    // Add the final response to OpenAI history
+                    setOpenaiHistory(prev => [...prev, { role: 'assistant', content: finalResponse }]);
 
                 } catch (error) {
                     console.error(`🤖 [Chat Debug] Function call error:`, error);
@@ -126,6 +140,9 @@ export function useChat() {
                     timestamp: new Date()
                 };
                 setMessages(prev => [...prev, botMessage]);
+
+                // Add the response to OpenAI history
+                setOpenaiHistory(prev => [...prev, { role: 'assistant', content: response.content || '' }]);
             }
         } catch (error) {
             // Handle general error
@@ -140,7 +157,7 @@ export function useChat() {
         } finally {
             setIsLoading(false);
         }
-    }, [messages]);
+    }, [openaiHistory]);
 
     return {
         messages,
