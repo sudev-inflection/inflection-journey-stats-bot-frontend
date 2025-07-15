@@ -51,7 +51,7 @@ export function useChat() {
 
         try {
             // Add the new user message to OpenAI history
-            const updatedHistory = [...openaiHistory, { role: 'user', content }];
+            const updatedHistory = [...openaiHistory, { role: 'user' as const, content }];
             setOpenaiHistory(updatedHistory);
 
             // Send to OpenAI with function calling enabled
@@ -99,8 +99,8 @@ export function useChat() {
                     // Update OpenAI history with assistant response and function result
                     const historyWithFunction = [
                         ...updatedHistory,
-                        { role: 'assistant', content: response.content || '' },
-                        { role: 'function', name: toolName, content: functionContent }
+                        { role: 'assistant' as const, content: response.content || '' },
+                        { role: 'function' as const, name: toolName, content: functionContent }
                     ];
                     setOpenaiHistory(historyWithFunction);
 
@@ -117,7 +117,7 @@ export function useChat() {
                     ));
 
                     // Add the final response to OpenAI history
-                    setOpenaiHistory(prev => [...prev, { role: 'assistant', content: finalResponse }]);
+                    setOpenaiHistory(prev => [...prev, { role: 'assistant' as const, content: finalResponse }]);
 
                 } catch (error) {
                     console.error(`🤖 [Chat Debug] Function call error:`, error);
@@ -142,7 +142,7 @@ export function useChat() {
                 setMessages(prev => [...prev, botMessage]);
 
                 // Add the response to OpenAI history
-                setOpenaiHistory(prev => [...prev, { role: 'assistant', content: response.content || '' }]);
+                setOpenaiHistory(prev => [...prev, { role: 'assistant' as const, content: response.content || '' }]);
             }
         } catch (error) {
             // Handle general error

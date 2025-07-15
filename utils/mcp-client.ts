@@ -67,8 +67,8 @@ export class MCPClient {
         if (schema.properties) {
             for (const [fieldName, fieldSchema] of Object.entries(schema.properties)) {
                 // Set default values if not provided
-                if (!(fieldName in processed) && 'default' in fieldSchema) {
-                    processed[fieldName] = fieldSchema.default;
+                if (!(fieldName in processed) && 'default' in (fieldSchema as any)) {
+                    processed[fieldName] = (fieldSchema as any).default;
                 }
             }
         }
