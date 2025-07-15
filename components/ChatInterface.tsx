@@ -6,6 +6,7 @@ import { Send, Bot, User, AlertCircle } from "lucide-react";
 import { useChat } from "../hooks/useChat";
 import { LoadingDots } from "./ui/loading-dots";
 import { validateConfig } from "../config/api-config";
+import ReactMarkdown from "react-markdown";
 
 export function ChatInterface() {
   const { messages, sendMessage, isLoading } = useChat();
@@ -112,7 +113,13 @@ export function ChatInterface() {
                     {message.isLoading && (
                       <LoadingDots className="text-gray-500" size="sm" />
                     )}
-                    <p className="whitespace-pre-wrap">{message.content}</p>
+                    {message.sender === 'user' ? (
+                      <p className="whitespace-pre-wrap">{message.content}</p>
+                    ) : (
+                      <div className="prose prose-sm max-w-none">
+                        <ReactMarkdown>{message.content}</ReactMarkdown>
+                      </div>
+                    )}
                   </div>
                   <p className={`text-xs mt-1 ${message.sender === 'user'
                     ? 'text-[var(--color-inflection-light)]'
